@@ -1,0 +1,6 @@
+{
+  "name": "R2D2 Chatbot Holocron",
+  "description": "Star Wars themed ChatGPT-like interface for the r2d2-chatbot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
