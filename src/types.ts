@@ -35,7 +35,7 @@ export type ConnectionMode = "simulator" | "target";
 
 export interface ApiConfig {
   mode: ConnectionMode;
-  targetUrl: string; // e.g. "http://localhost:8000/api/v1" or similar
+  targetUrl: string; // e.g. "https://r2d2-chatbot.onrender.com/api/v1" or similar
   token: string;
   simulatedToken: string;
   activeChatId: string | null;

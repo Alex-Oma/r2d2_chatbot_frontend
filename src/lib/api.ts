@@ -3,7 +3,7 @@ import { ApiConfig, ConnectionMode, Chat, Message, User, UserProfile } from "../
 class StarWarsApiClient {
   private config: ApiConfig = {
     mode: "target",
-    targetUrl: "http://localhost:8000/api/v1",
+    targetUrl: "https://r2d2-chatbot.onrender.com/api/v1",
     token: localStorage.getItem("sw_target_token") || "",
     simulatedToken: "pilot-token",
     activeChatId: null
@@ -43,16 +43,20 @@ class StarWarsApiClient {
       // Relative path to current node server which is serving the simulator
       return "/api/v1";
     }
-    return this.config.targetUrl;
+    // Use the backend proxy to bypass browser-level CORS policies
+    return "/api/proxy";
   }
 
   private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json"
     };
     const token = this.config.mode === "simulator" ? this.config.simulatedToken : this.config.token;
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    }
+    if (this.config.mode !== "simulator") {
+      headers["X-Target-URL"] = this.config.targetUrl;
     }
     return headers;
   }
@@ -61,7 +65,7 @@ class StarWarsApiClient {
     const url = `${this.getBaseUrl()}/auth/register`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getHeaders(),
       body: JSON.stringify({ email, username, password: passwordString })
     });
     if (!response.ok) {
@@ -75,7 +79,7 @@ class StarWarsApiClient {
     const url = `${this.getBaseUrl()}/auth/login`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getHeaders(),
       body: JSON.stringify({ email, password: passwordString })
     });
     if (!response.ok) {
@@ -104,7 +108,7 @@ class StarWarsApiClient {
     const url = `${this.getBaseUrl()}/auth/refresh`;
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getHeaders(),
       body: JSON.stringify({ refresh_token: refToken })
     });
     if (!response.ok) {
@@ -127,11 +131,25 @@ class StarWarsApiClient {
   }
 
   async testConnection(url: string): Promise<{ status: string; app?: string; database?: string }> {
-    const response = await fetch(`${url}/health`, {
+    const isExternal = url.startsWith("http://") || url.startsWith("https://");
+    const fetchUrl = isExternal ? "/api/proxy/health" : `${url}/health`;
+    
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (isExternal) {
+      headers["X-Target-URL"] = url;
+    }
+    
+    const response = await fetch(fetchUrl, {
       method: "GET",
-      headers: { "Content-Type": "application/json" }
+      headers
     });
-    if (!response.ok) throw new Error("Could not ping health coordinates.");
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => null);
+      const errMsg = errBody?.detail || `HTTP Status ${response.status}`;
+      throw new Error(`Connection transmission failed: ${errMsg}`);
+    }
     return response.json();
   }
 

@@ -11,6 +11,138 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// CORS Bypass Proxy to forward requests to the Fast API Target URL
+app.all("/api/proxy/*", async (req: express.Request, res: express.Response) => {
+  const targetBaseUrl = req.headers["x-target-url"] as string;
+  
+  // Extract trailing path after /api/proxy/ (e.g. /api/proxy/auth/login -> auth/login)
+  let subpath = req.params[0] || "";
+  if (!subpath) {
+    subpath = req.path.replace(/^\/api\/proxy\/?/, "");
+  }
+  
+  // Ensure no leading slash to prevent double-slash patterns
+  if (subpath.startsWith("/")) {
+    subpath = subpath.substring(1);
+  }
+
+  const queryIndex = req.url.indexOf("?");
+  const queryString = queryIndex !== -1 ? req.url.substring(queryIndex) : "";
+
+  if (!targetBaseUrl) {
+    console.error(`[Proxy Error] Missing X-Target-URL for route: ${subpath}`);
+    return res.status(400).json({ detail: "Missing X-Target-URL coordinate header in transmission." });
+  }
+
+  const cleanBaseUrl = targetBaseUrl.endsWith("/") ? targetBaseUrl.slice(0, -1) : targetBaseUrl;
+  const destinationUrl = `${cleanBaseUrl}/${subpath}${queryString}`;
+
+  console.log(`[Proxy Request] Forwarding: ${req.method} ${req.url} -> ${destinationUrl}`);
+
+  try {
+    // Forward selective Headers
+    const headers: Record<string, string> = {};
+    const skippedHeaders = [
+      "host",
+      "connection",
+      "content-length",
+      "x-target-url",
+      "content-type",
+      "origin",
+      "referer",
+      "accept-encoding",
+      "sec-ch-ua",
+      "sec-ch-ua-mobile",
+      "sec-ch-ua-platform",
+      "sec-fetch-dest",
+      "sec-fetch-mode",
+      "sec-fetch-site",
+      "sec-fetch-user"
+    ];
+
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (skippedHeaders.includes(key.toLowerCase())) {
+        continue;
+      }
+      if (typeof value === "string") {
+        headers[key] = value;
+      } else if (Array.isArray(value)) {
+        headers[key] = value.join(", ");
+      }
+    }
+
+    // Set content-type
+    if (req.headers["content-type"]) {
+      headers["content-type"] = req.headers["content-type"] as string;
+    } else if (["POST", "PUT", "PATCH"].includes(req.method)) {
+      headers["content-type"] = "application/json";
+    }
+
+    // Setup request options
+    const fetchOptions: RequestInit = {
+      method: req.method,
+      headers
+    };
+
+    // Forward body if present
+    if (["POST", "PUT", "PATCH"].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
+      fetchOptions.body = JSON.stringify(req.body);
+    }
+
+    // Perform server-to-server fetch request without CORS limits
+    const proxyResponse = await fetch(destinationUrl, fetchOptions);
+
+    console.log(`[Proxy Response] Status: ${proxyResponse.status} from ${destinationUrl}`);
+
+    // Stream/send the response back, respecting content-type
+    const contentType = proxyResponse.headers.get("content-type") || "";
+    res.status(proxyResponse.status);
+    
+    // Set response headers
+    for (const [key, value] of proxyResponse.headers.entries()) {
+      if (["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+        continue;
+      }
+      res.setHeader(key, value);
+    }
+
+    // Check if the response is SSE / Event-Stream
+    if (contentType.includes("text/event-stream")) {
+      const reader = proxyResponse.body;
+      if (reader) {
+        const rStream = reader as any;
+        if (typeof rStream.pipe === "function") {
+          rStream.pipe(res);
+        } else if (rStream.getReader) {
+          const webReader = rStream.getReader();
+          while (true) {
+            const { done, value } = await webReader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        } else {
+          for await (const chunk of rStream) {
+            res.write(chunk);
+          }
+          res.end();
+        }
+      } else {
+        const text = await proxyResponse.text();
+        res.send(text);
+      }
+    } else {
+      const blob = await proxyResponse.arrayBuffer();
+      res.send(Buffer.from(blob));
+    }
+  } catch (error: any) {
+    console.error(`[Proxy Fail] Error fetching ${destinationUrl}:`, error);
+    res.status(502).json({
+      detail: `Transmission relay error while routing to backend coordinates: ${error.message}`
+    });
+  }
+});
+
 // In-memory Mock DB for Chatbot Simulator
 interface User {
   id: string;
@@ -604,7 +736,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`R2D2 Chatbot Holocron Server running on http://localhost:${PORT}`);
+    console.log(`R2D2 Chatbot Holocron Server running on https://r2d2-chatbot.onrender.com`);
   });
 }
 

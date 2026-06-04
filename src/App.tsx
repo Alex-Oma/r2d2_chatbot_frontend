@@ -12,7 +12,7 @@ import { Chat, Message, User as SwUser, StarWarsCharacter, ConnectionMode } from
 export default function App() {
   // Connection and system states
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("target");
-  const [targetUrl, setTargetUrl] = useState("http://localhost:8000/api/v1");
+  const [targetUrl, setTargetUrl] = useState("https://r2d2-chatbot.onrender.com/api/v1");
   const [targetToken, setTargetToken] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected">("connected");
@@ -144,15 +144,25 @@ export default function App() {
       playBeep(880, 0.08, "triangle");
       setTimeout(() => playBeep(1200, 0.05, "triangle"), 90);
       setTimeout(() => playBeep(600, 0.12, "sine"), 150);
-    } else if (key === "c3po") {
-      playBeep(520, 0.15, "triangle");
-      setTimeout(() => playBeep(780, 0.1, "triangle"), 150);
-    } else if (key === "yoda") {
-      playBeep(330, 0.2, "sine");
-      setTimeout(() => playBeep(440, 0.25, "sine"), 200);
-    } else if (key === "vader") {
-      playBeep(110, 0.3, "square");
-      setTimeout(() => playBeep(90, 0.35, "square"), 250);
+    } else if (key === "chopper") {
+      playBeep(980, 0.06, "sawtooth");
+      setTimeout(() => playBeep(440, 0.08, "square"), 70);
+      setTimeout(() => playBeep(1150, 0.14, "sawtooth"), 140);
+    } else if (key === "fenn-rau") {
+      playBeep(420, 0.12, "triangle");
+      setTimeout(() => playBeep(640, 0.15, "triangle"), 120);
+    } else if (key === "captain-rex") {
+      playBeep(580, 0.08, "sine");
+      setTimeout(() => playBeep(580, 0.08, "sine"), 100);
+      setTimeout(() => playBeep(880, 0.15, "triangle"), 200);
+    } else if (key === "hondo-ohnaka") {
+      playBeep(330, 0.1, "sine");
+      setTimeout(() => playBeep(494, 0.1, "sine"), 100);
+      setTimeout(() => playBeep(523, 0.1, "sine"), 200);
+      setTimeout(() => playBeep(587, 0.25, "triangle"), 300);
+    } else if (key === "ursa-wren") {
+      playBeep(660, 0.15, "sine");
+      setTimeout(() => playBeep(554, 0.2, "sine"), 160);
     }
   };
 
@@ -641,25 +651,34 @@ export default function App() {
           laser: "bg-blue-500",
           badge: "bg-blue-500/10 text-blue-300 border-blue-500/30"
         };
-      case "c3po":
+      case "chopper":
+        return {
+          border: "border-orange-500/20",
+          bg: "bg-orange-950/20",
+          text: "text-orange-400",
+          glow: "shadow-orange-500/10 hover:shadow-orange-500/20",
+          laser: "bg-orange-500",
+          badge: "bg-orange-500/10 text-orange-300 border-orange-500/30"
+        };
+      case "fenn-rau":
         return {
           border: "border-amber-500/20",
           bg: "bg-amber-950/20",
-          text: "text-amber-400",
+          text: "text-amber-500",
           glow: "shadow-amber-500/10 hover:shadow-amber-500/20",
           laser: "bg-amber-500",
           badge: "bg-amber-500/10 text-amber-300 border-amber-500/30"
         };
-      case "yoda":
+      case "captain-rex":
         return {
-          border: "border-emerald-500/20",
-          bg: "bg-emerald-950/20",
-          text: "text-emerald-400",
-          glow: "shadow-emerald-500/10 hover:shadow-emerald-500/20",
-          laser: "bg-emerald-500",
-          badge: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+          border: "border-sky-500/20",
+          bg: "bg-sky-950/20",
+          text: "text-sky-400",
+          glow: "shadow-sky-500/10 hover:shadow-sky-500/20",
+          laser: "bg-sky-500",
+          badge: "bg-sky-500/10 text-sky-350 border-sky-500/30"
         };
-      case "vader":
+      case "hondo-ohnaka":
         return {
           border: "border-red-500/20",
           bg: "bg-red-950/20",
@@ -667,6 +686,15 @@ export default function App() {
           glow: "shadow-red-500/10 hover:shadow-red-500/20",
           laser: "bg-red-500",
           badge: "bg-red-500/10 text-red-300 border-red-500/30"
+        };
+      case "ursa-wren":
+        return {
+          border: "border-purple-500/20",
+          bg: "bg-purple-950/20",
+          text: "text-purple-400",
+          glow: "shadow-purple-500/10 hover:shadow-purple-500/20",
+          laser: "bg-purple-500",
+          badge: "bg-purple-500/10 text-purple-300 border-purple-500/30"
         };
       default:
         return {
@@ -691,7 +719,7 @@ export default function App() {
     } catch (e: any) {
       logTelemetry(`${targetUrl}/health`, "GET", undefined, { error: e.message }, 500, "health");
       playBeep(180, 0.3, "sawtooth");
-      alert(`Ping failed to coordinates block at ${targetUrl}/health. Make sure your FastAPI webserver is running!`);
+      alert(`Ping failed to coordinates block at ${targetUrl}/health. Error Details: ${e.message}. Make sure your FastAPI webserver is running!`);
     } finally {
       setIsConnecting(false);
     }
@@ -826,7 +854,7 @@ export default function App() {
           <div className="flex items-center gap-2 w-full sm:w-auto animate-fade-in">
             <input 
               type="text" 
-              placeholder="Target API prefix e.g. http://localhost:8000/api/v1"
+              placeholder="Target API prefix e.g. https://r2d2-chatbot.onrender.com/api/v1"
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               className="bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-sm w-56 font-mono text-xs focus:outline-none focus:border-purple-500"
@@ -1387,9 +1415,11 @@ export default function App() {
                 <div className="w-4 h-4 rounded-full border-2 border-slate-700 border-t-blue-500 animate-spin"></div>
                 <span>
                   {selectedCharacter.key === "r2d2" && "R2-D2 is revolving binary converters..."}
-                  {selectedCharacter.key === "c3po" && "C-3PO is assessing existential odds of answers..."}
-                  {selectedCharacter.key === "yoda" && "Yoda is focusing inner living Force flow..."}
-                  {selectedCharacter.key === "vader" && "Darth Vader is calculating the dark strategy..."}
+                  {selectedCharacter.key === "chopper" && "Chopper is rummaging through weapon gear & grunting..."}
+                  {selectedCharacter.key === "fenn-rau" && "Fenn Rau is reviewing tactical Concord Dawn arrays..."}
+                  {selectedCharacter.key === "captain-rex" && "Captain Rex is organizing trooper squad protocols..."}
+                  {selectedCharacter.key === "hondo-ohnaka" && "Hondo Ohnaka is outlining lucrative partnership margins..."}
+                  {selectedCharacter.key === "ursa-wren" && "Ursa Wren is mobilizing Clan defenders..."}
                 </span>
               </div>
             )}
@@ -1591,7 +1621,7 @@ export default function App() {
 {`{
   "title": "string",
   "system_prompt": "string",
-  "character_key": "r2d2" | "c3po" | "yoda" | "vader",
+  "character_key": "fenn-rau" | "r2d2" | "captain-rex" | "hondo-ohnaka" | "ursa-wren" | "chopper",
   "model": "string"
 }`}
                     </pre>
