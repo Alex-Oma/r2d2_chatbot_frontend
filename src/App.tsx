@@ -670,7 +670,7 @@ export default function App() {
   const activeTheme = getCharacterThemeClass(selectedCharacter.key);
 
   return (
-    <div className="min-h-screen space-bg font-sans text-slate-100 flex flex-col selection:bg-blue-500/30 selection:text-white relative overflow-x-hidden holo-scan" id="root-viewport">
+    <div className="h-screen space-bg font-sans text-slate-100 flex flex-col selection:bg-blue-500/30 selection:text-white relative overflow-hidden holo-scan" id="root-viewport">
       <div className="holo-line"></div>
       
       {/* Dynamic Star Wars Cockpit Header */}
