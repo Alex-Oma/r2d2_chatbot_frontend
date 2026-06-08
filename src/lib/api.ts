@@ -5,15 +5,13 @@ class StarWarsApiClient {
     mode: "target",
     targetUrl: "https://r2d2-chatbot.onrender.com/api/v1",
     token: localStorage.getItem("sw_target_token") || "",
-    simulatedToken: "pilot-token",
+    simulatedToken: "",
     activeChatId: null
   };
 
   constructor() {
     // Sync to local storage
-    const storedMode = localStorage.getItem("sw_api_mode") as ConnectionMode;
     const storedTargetUrl = localStorage.getItem("sw_target_url");
-    if (storedMode) this.config.mode = storedMode;
     if (storedTargetUrl) this.config.targetUrl = storedTargetUrl;
   }
 
@@ -22,8 +20,8 @@ class StarWarsApiClient {
   }
 
   setMode(mode: ConnectionMode) {
-    this.config.mode = mode;
-    localStorage.setItem("sw_api_mode", mode);
+    this.config.mode = "target";
+    localStorage.setItem("sw_api_mode", "target");
   }
 
   setTargetUrl(url: string) {
@@ -39,10 +37,6 @@ class StarWarsApiClient {
   }
 
   private getBaseUrl(): string {
-    if (this.config.mode === "simulator") {
-      // Relative path to current node server which is serving the simulator
-      return "/api/v1";
-    }
     // Use the backend proxy to bypass browser-level CORS policies
     return "/api/proxy";
   }
@@ -51,13 +45,11 @@ class StarWarsApiClient {
     const headers: Record<string, string> = {
       "Content-Type": "application/json"
     };
-    const token = this.config.mode === "simulator" ? this.config.simulatedToken : this.config.token;
+    const token = this.config.token;
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
-    if (this.config.mode !== "simulator") {
-      headers["X-Target-URL"] = this.config.targetUrl;
-    }
+    headers["X-Target-URL"] = this.config.targetUrl;
     return headers;
   }
 
@@ -87,23 +79,15 @@ class StarWarsApiClient {
       throw new Error(err.detail || "Login credentials rejected.");
     }
     const data = await response.json();
-    if (this.config.mode === "simulator") {
-      this.config.simulatedToken = data.access_token;
-      if (data.refresh_token) {
-        localStorage.setItem("sw_simulated_refresh_token", data.refresh_token);
-      }
-    } else {
-      this.setTargetToken(data.access_token);
-      if (data.refresh_token) {
-        localStorage.setItem("sw_target_refresh_token", data.refresh_token);
-      }
+    this.setTargetToken(data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem("sw_target_refresh_token", data.refresh_token);
     }
     return data;
   }
 
   async refreshToken(): Promise<{ access_token: string; refresh_token: string }> {
-    const key = this.config.mode === "simulator" ? "sw_simulated_refresh_token" : "sw_target_refresh_token";
-    const refToken = localStorage.getItem(key) || "pilot-refresh";
+    const refToken = localStorage.getItem("sw_target_refresh_token") || "pilot-refresh";
     
     const url = `${this.getBaseUrl()}/auth/refresh`;
     const response = await fetch(url, {
@@ -116,16 +100,9 @@ class StarWarsApiClient {
       throw new Error(err.detail || "Subspace token refresh rejected.");
     }
     const data = await response.json();
-    if (this.config.mode === "simulator") {
-      this.config.simulatedToken = data.access_token;
-      if (data.refresh_token) {
-        localStorage.setItem("sw_simulated_refresh_token", data.refresh_token);
-      }
-    } else {
-      this.setTargetToken(data.access_token);
-      if (data.refresh_token) {
-        localStorage.setItem("sw_target_refresh_token", data.refresh_token);
-      }
+    this.setTargetToken(data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem("sw_target_refresh_token", data.refresh_token);
     }
     return data;
   }

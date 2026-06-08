@@ -49,7 +49,6 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   // Interface view customization
-  const [activeTab, setActiveTab] = useState<"chat" | "endpoints" | "schemas">("chat");
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editChatTitleText, setEditChatTitleText] = useState("");
 
@@ -283,7 +282,7 @@ export default function App() {
       setIsConnecting(true);
       setErrorBanner(null);
 
-      const key = connectionMode === "simulator" ? "sw_simulated_refresh_token" : "sw_target_refresh_token";
+      const key = "sw_target_refresh_token";
       const existingRefreshToken = localStorage.getItem(key) || "pilot-refresh";
 
       logTelemetry("/api/v1/auth/refresh", "POST", { refresh_token: existingRefreshToken ? existingRefreshToken.substring(0, 10) + "..." : "none" }, undefined, 200, "auth");
@@ -329,72 +328,15 @@ export default function App() {
     logTelemetry("/api/v1/auth/logout", "POST", undefined, { status: "tokens purged" }, 200, "auth");
   };
 
-  // Developer bypass guest login to allow test drive without active backend configuration
-  const handleDeveloperBypass = () => {
-    try {
-      setIsConnecting(true);
-      setErrorBanner(null);
-      setAuthError(null);
-      setAuthSuccessMsg(null);
-      
-      logTelemetry("/api/v1/auth/bypass", "POST", { mode: "simulation-guest" }, undefined, 200, "auth");
-      
-      const mockUserRes: SwUser = {
-        id: "pilot-user",
-        email: "skywalker@rebels.org",
-        username: "Luke Skywalker",
-        profile: {
-          display_name: "Luke Skywalker",
-          avatar_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop",
-          bio: "Jedi Commander. Operating imperial console via sandbox bypass mode.",
-          preferred_model: "gemini-3.5-flash"
-        }
-      };
-      
-      setCurrentUser(mockUserRes);
-      setDisplayNameInput(mockUserRes.profile.display_name || mockUserRes.username);
-      setBioInput(mockUserRes.profile.bio || "");
-      setPreferredModel(mockUserRes.profile.preferred_model || "gemini-3.5-flash");
 
-      setChats([
-        {
-          id: "chat-sim-1",
-          title: "Galactic Transmitter Offline",
-          system_prompt: "Standard backup beacon mode.",
-          character_key: "r2d2",
-          model: "gemini-3.5-flash",
-          created_at: new Date().toISOString()
-        }
-      ]);
-      setActiveChatId("chat-sim-1");
-      setMessages([
-        {
-          id: "msg-sim-1",
-          chat_id: "chat-sim-1",
-          role: "assistant",
-          content: "*screech beep warning* [The system is operating in off-grid simulation mode. Use the endpoints tab and telemetry dashboard to inspect HTTP payloads.]",
-          character_key: "r2d2",
-          model: "gemini-3.5-flash",
-          created_at: new Date().toISOString()
-        }
-      ]);
-      setConnectionStatus("connected");
-      playBeep(900, 0.08, "sine");
-      setTimeout(() => playBeep(1100, 0.08, "sine"), 80);
-    } catch (err: any) {
-      setErrorBanner(err.message);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
 
   // Change backend mode and re-engage
   const handleConfigUpdate = async (mode: ConnectionMode, url: string, token: string) => {
-    api.setMode(mode);
+    api.setMode("target");
     api.setTargetUrl(url);
     if (token) api.setTargetToken(token);
     
-    setConnectionMode(mode);
+    setConnectionMode("target");
     setTargetUrl(url);
     setTargetToken(token);
 
@@ -402,7 +344,7 @@ export default function App() {
     setTimeout(() => playBeep(554, 0.1, "sine"), 100);
     setTimeout(() => playBeep(659, 0.15, "sine"), 200);
 
-    logTelemetry(`${url}/health`, "GET", undefined, { message: `Reconfigured connection client to ${mode}` }, 200, "health");
+    logTelemetry(`${url}/health`, "GET", undefined, { message: `Reconfigured connection client targeting external FastAPI` }, 200, "health");
     loadUserAndChats();
   };
 
@@ -770,10 +712,7 @@ export default function App() {
 
           {/* Connection parameters button */}
           <div className="hidden md:flex items-center space-x-2 bg-slate-900 px-3 py-1.5 rounded-md border border-slate-800 text-xs font-mono">
-            <span className="text-slate-500">Mode:</span>
-            <span className={`px-1.5 py-0.5 rounded font-bold ${connectionMode === "simulator" ? "bg-cyan-950 text-cyan-400 border border-cyan-800/50" : "bg-purple-950 text-purple-400 border border-purple-800/50"}`}>
-              {connectionMode === "simulator" ? "LOCAL EMULATOR" : "FASTAPI LIVE TARGET"}
-            </span>
+            <span className="text-slate-400 font-bold uppercase">🛰️ FastAPI Target</span>
             <span className="text-slate-600">|</span>
             {connectionStatus === "connected" ? (
               <span className="text-emerald-400 flex items-center space-x-1">
@@ -827,66 +766,39 @@ export default function App() {
       <div className="bg-slate-950/70 border-b border-slate-900 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs" id="connection-ribbon">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-slate-400 font-mono flex items-center gap-1">
-            <Database size={13} className="text-blue-400" />
-            <span>Telemetry Link:</span>
+            <Database size={13} className="text-purple-400 animate-pulse" />
+            <span className="font-bold text-slate-300">FastAPI Router Coordinates:</span>
           </span>
-          <div className="inline-flex rounded border border-slate-800 overflow-hidden bg-slate-900 p-0.5">
-            <button
-              type="button"
-              onClick={() => handleConfigUpdate("simulator", targetUrl, targetToken)}
-              className={`px-3 py-1 rounded text-[11px] font-mono transition-all uppercase font-medium ${connectionMode === "simulator" ? "bg-blue-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
-              id="mode-sim-btn"
-            >
-              🌌 Built-in Simulator
-            </button>
-            <button
-              type="button"
-              onClick={() => handleConfigUpdate("target", targetUrl, targetToken)}
-              className={`px-3 py-1 rounded text-[11px] font-mono transition-all uppercase font-medium ${connectionMode === "target" ? "bg-purple-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
-              id="mode-target-btn"
-            >
-              🛰️ External FastAPI Router
-            </button>
-          </div>
         </div>
 
-        {connectionMode === "target" && (
-          <div className="flex items-center gap-2 w-full sm:w-auto animate-fade-in">
-            <input 
-              type="text" 
-              placeholder="Target API prefix e.g. https://r2d2-chatbot.onrender.com/api/v1"
-              value={targetUrl}
-              onChange={(e) => setTargetUrl(e.target.value)}
-              className="bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-sm w-56 font-mono text-xs focus:outline-none focus:border-purple-500"
-              id="target-url-input"
-            />
-            <input 
-              type="password" 
-              placeholder="Authorization Token (Bearer)"
-              value={targetToken}
-              onChange={(e) => setTargetToken(e.target.value)}
-              className="bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-sm w-36 font-mono text-xs focus:outline-none focus:border-purple-500"
-              title="Leave empty if using simulation token"
-              id="target-token-input"
-            />
-            <button 
-              type="button"
-              onClick={handleManualTestPing}
-              className="bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800/50 px-3 py-1 rounded font-mono font-medium hover:text-white transition-colors flex items-center gap-1 shrink-0"
-              id="test-ping-btn"
-            >
-              <Wifi size={12} />
-              <span>Ping & Apply</span>
-            </button>
-          </div>
-        )}
-
-        {connectionMode === "simulator" && (
-          <div className="text-slate-400 font-mono text-[11px] text-right flex items-center justify-end gap-1.5 ml-auto">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-            <span>Local sandbox handles server-side Gemini generation. Key check ok.</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input 
+            type="text" 
+            placeholder="Target API prefix e.g. https://r2d2-chatbot.onrender.com/api/v1"
+            value={targetUrl}
+            onChange={(e) => setTargetUrl(e.target.value)}
+            className="bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-sm w-64 md:w-80 font-mono text-xs focus:outline-none focus:border-purple-500"
+            id="target-url-input"
+          />
+          <input 
+            type="password" 
+            placeholder="Authorization Token (Bearer)"
+            value={targetToken}
+            onChange={(e) => setTargetToken(e.target.value)}
+            className="bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-sm w-44 font-mono text-xs focus:outline-none focus:border-purple-500"
+            title="Authorization key"
+            id="target-token-input"
+          />
+          <button 
+            type="button"
+            onClick={handleManualTestPing}
+            className="bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800/50 px-3 py-1 rounded font-mono font-medium hover:text-white transition-colors flex items-center gap-1 shrink-0"
+            id="test-ping-btn"
+          >
+            <Wifi size={12} />
+            <span>Connect & Apply</span>
+          </button>
+        </div>
       </div>
 
       {/* Warning/Error Banner */}
@@ -1074,24 +986,16 @@ export default function App() {
                 </div>
 
                 <div className="text-[10px] text-slate-600 border-t border-slate-900 pt-2.5 flex flex-col space-y-2">
-                  <span>OR BYPASS CONNECTION INSTANTLY FOR PREVIEW</span>
+                  <span>ADVANCED SECURITY UTILITIES</span>
                   <div className="flex gap-1.5 justify-center">
                     <button
                       type="button"
-                      onClick={handleDeveloperBypass}
-                      className="px-2.5 py-1 bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:text-slate-200 rounded text-[9px] text-slate-400 uppercase tracking-widest transition-colors font-bold"
-                      title="Open terminal mock offline environment"
-                    >
-                      🛸 Simulation Guest Access
-                    </button>
-                    <button
-                      type="button"
                       onClick={handleTokenRefresh}
-                      className="px-2.5 py-1 bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:text-purple-300 rounded text-[9px] text-slate-400 uppercase tracking-widest transition-colors flex items-center gap-1 font-bold"
-                      title="Step 3: Trigger OAuth POST /api/v1/auth/refresh to cycle token"
+                      className="px-3 py-1 bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:text-purple-300 rounded text-[10px] text-slate-400 uppercase tracking-widest transition-colors flex items-center gap-1.5 font-bold"
+                      title="Trigger OAuth POST /api/v1/auth/refresh to cycle token"
                     >
                       <RefreshCw size={10} className="animate-spin" />
-                      <span>Rotate Key</span>
+                      <span>Rotate Access Key</span>
                     </button>
                   </div>
                 </div>
@@ -1459,200 +1363,6 @@ export default function App() {
             </div>
           </div>
         </main>
-
-        {/* RIGHT PANEL: Live REST API Diagnostics Workbench Dashboard */}
-        <section className="w-80 border-l border-slate-900 bg-slate-950/90 hidden lg:flex flex-col shrink-0 overflow-hidden text-slate-300 z-10" id="sidebar-telemetry">
-          {/* Header tabs tab selectors */}
-          <div className="border-b border-slate-900 bg-slate-950 p-2 grid grid-cols-3 gap-1" id="telemetry-views-header">
-            <button
-              onClick={() => setActiveTab("chat")}
-              className={`py-1 rounded text-center text-[10px] font-mono uppercase tracking-wider ${activeTab === "chat" ? "bg-slate-900 text-white border border-slate-800 font-bold" : "text-slate-400 hover:text-slate-300"}`}
-              id="tab-btn-telemetry"
-            >
-              Telemetry
-            </button>
-            <button
-              onClick={() => setActiveTab("endpoints")}
-              className={`py-1 rounded text-center text-[10px] font-mono uppercase tracking-wider ${activeTab === "endpoints" ? "bg-slate-900 text-white border border-slate-800 font-bold" : "text-slate-400 hover:text-slate-300"}`}
-              id="tab-btn-endpoints"
-            >
-              Endpoints
-            </button>
-            <button
-              onClick={() => setActiveTab("schemas")}
-              className={`py-1 rounded text-center text-[10px] font-mono uppercase tracking-wider ${activeTab === "schemas" ? "bg-slate-900 text-white border border-slate-850 font-bold" : "text-slate-400 hover:text-slate-300"}`}
-              id="tab-btn-schemas"
-            >
-              Schema Model
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {activeTab === "chat" && (
-              <div className="p-4 space-y-4 font-mono text-xs">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold tracking-widest text-slate-400 uppercase">
-                    📡 Transmission Feed
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setTelemetryLogs([]);
-                      playBeep(220, 0.05, "sine");
-                    }}
-                    className="text-[10px] text-slate-500 hover:text-slate-300 underline"
-                  >
-                    Clear logs
-                  </button>
-                </div>
-                
-                <p className="text-[11px] text-slate-400 leading-normal">
-                  This interactive monitor displays real-time HTTP payloads sent by this client interface directly mapping to the fastapi endpoints backend of R2D2.
-                </p>
-
-                <div className="space-y-3">
-                  {telemetryLogs.map((log, index) => {
-                    const statusColor = log.status < 300 ? "text-emerald-400" : "text-red-400";
-                    const methodColor = log.method === "POST" ? "text-purple-400" : log.method === "PATCH" ? "text-yellow-400" : log.method === "DELETE" ? "text-red-400" : "text-cyan-400";
-                    
-                    return (
-                      <div key={index} className="p-2 bg-slate-900 rounded border border-slate-850 space-y-1.5" id={`telemetry-item-${index}`}>
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className={`font-bold ${methodColor}`}>
-                            [{log.method}] <span className="text-slate-300">{log.endpoint}</span>
-                          </span>
-                          <span className="text-slate-500">{log.timestamp}</span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between text-[10px] bg-slate-950 p-1 rounded">
-                          <span className="text-slate-500">Status Code:</span>
-                          <span className={`font-bold ${statusColor}`}>{log.status}</span>
-                        </div>
-
-                        {log.requestPayload && (
-                          <div className="space-y-0.5">
-                            <span className="text-slate-500 text-[9px] uppercase">Request Body:</span>
-                            <pre className="bg-slate-950 p-1.5 rounded overflow-x-auto text-[10px] max-h-24 font-mono text-blue-300">
-                              {JSON.stringify(log.requestPayload, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-
-                        {log.responsePayload && (
-                          <div className="space-y-0.5">
-                            <span className="text-slate-500 text-[9px] uppercase">Response Body:</span>
-                            <pre className="bg-slate-950 p-1.5 rounded overflow-x-auto text-[10px] max-h-32 font-mono text-green-300">
-                              {JSON.stringify(log.responsePayload, null, 2)}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {activeTab === "endpoints" && (
-              <div className="p-4 space-y-4 font-mono text-xs">
-                <h3 className="text-xs font-bold tracking-widest text-slate-400 uppercase">
-                  🪐 Rest API Catalog
-                </h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  FastAPI endpoints documented in the API specifications mapping layout.
-                </p>
-
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1">
-                      <span className="bg-cyan-950 text-cyan-400 px-1 py-0.5 rounded text-[9px] font-bold">GET</span>
-                      <span className="font-semibold text-slate-200">/api/v1/health</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 leading-tight">Returns health diagnostic coordinate mapping parameters.</p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1">
-                      <span className="bg-purple-950 text-purple-400 px-1 py-0.5 rounded text-[9px] font-bold">POST</span>
-                      <span className="font-semibold text-slate-200">/api/v1/auth/login</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 leading-tight">Requests token for access credentials.</p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1">
-                      <span className="bg-purple-950 text-purple-400 px-1 py-0.5 rounded text-[9px] font-bold">POST</span>
-                      <span className="font-semibold text-slate-200">/api/v1/chats</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 leading-tight">Initialize new session. Parameters: `title`, `character_key`, `model`.</p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1">
-                      <span className="bg-purple-950 text-purple-400 px-1 py-0.5 rounded text-[9px] font-bold">POST</span>
-                      <span className="font-semibold text-slate-200">/api/v1/messages</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 leading-tight">Returns user query feedback using discrete prompt parameters (non-streaming).</p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-1">
-                      <span className="bg-purple-950 text-purple-400 px-1 py-0.5 rounded text-[9px] font-bold">POST</span>
-                      <span className="font-semibold text-slate-200">/api/v1/messages/stream</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 leading-tight">Returns server-sent event stream chunk loops. Highly persistent for responsive interfaces.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "schemas" && (
-              <div className="p-4 space-y-4 font-mono text-xs">
-                <h3 className="text-xs font-bold tracking-widest text-slate-400 uppercase">
-                  📦 Payload Models
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  Schemas expected by the REST API validators.
-                </p>
-
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <span className="text-slate-200 font-bold block">ChatCreate:</span>
-                    <pre className="bg-slate-900 p-2 rounded text-[10px] leading-tight text-yellow-300">
-{`{
-  "title": "string",
-  "system_prompt": "string",
-  "character_key": "fenn-rau" | "r2d2" | "captain-rex" | "hondo-ohnaka" | "ursa-wren" | "chopper",
-  "model": "string"
-}`}
-                    </pre>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-slate-200 font-bold block">MessageCreate:</span>
-                    <pre className="bg-slate-900 p-2 rounded text-[10px] leading-tight text-blue-300">
-{`{
-  "chat_id": "uuid",
-  "content": "string",
-  "character_key": "string"
-}`}
-                    </pre>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-slate-200 font-bold block">StreamMessageRequest:</span>
-                    <pre className="bg-slate-900 p-2 rounded text-[10px] leading-tight text-cyan-300">
-{`{
-  "chat_id": "uuid",
-  "content": "string",
-  "character_key": "string"
-}`}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
           </>
         )}
       </div>
