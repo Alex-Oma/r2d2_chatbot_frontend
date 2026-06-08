@@ -1,5 +1,39 @@
 import { ApiConfig, ConnectionMode, Chat, Message, User, UserProfile } from "../types";
 
+export function extractErrorMessage(errStr: string): string {
+  if (!errStr) return "Signal transmission failed.";
+  
+  // Try parsing as standard JSON
+  try {
+    const parsed = JSON.parse(errStr);
+    if (parsed.detail) {
+      if (typeof parsed.detail === "string") {
+        return extractErrorMessage(parsed.detail); // Recurse on detail if it contains nested error text
+      }
+      return JSON.stringify(parsed.detail);
+    }
+    if (parsed.error?.message) return parsed.error.message;
+    if (parsed.message) return parsed.message;
+  } catch {
+    // If it's a string, we continue
+  }
+  
+  // Look for rate-limited warning patterns inside Python dict expressions that might be nested using single quotes
+  const rawMatch = errStr.match(/'raw':\s*'([^']+)'/) || errStr.match(/"raw":\s*"([^"]+)"/);
+  if (rawMatch && rawMatch[1]) {
+    return rawMatch[1];
+  }
+  
+  const msgMatch = errStr.match(/'message':\s*'([^']+)'/) || errStr.match(/"message":\s*"([^"]+)"/);
+  if (msgMatch && msgMatch[1]) {
+    return msgMatch[1];
+  }
+
+  // Remove leading "[ERROR] Error code: X -"
+  let clean = errStr.replace(/^\[ERROR\]\s*(Error code:\s*\d+\s*-\s*)?/gi, "");
+  return clean.trim() || errStr;
+}
+
 class StarWarsApiClient {
   private config: ApiConfig = {
     mode: "target",
@@ -242,7 +276,10 @@ class StarWarsApiClient {
         character_key: characterKey
       })
     });
-    if (!response.ok) throw new Error("Signal transmission crashed.");
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Signal transmission failed.");
+      throw new Error(extractErrorMessage(errorText));
+    }
     return response.json();
   }
 
@@ -256,6 +293,14 @@ class StarWarsApiClient {
     onError: (err: Error) => void
   ) {
     const url = `${this.getBaseUrl()}/messages/stream`;
+    let onDoneCalled = false;
+    const safeOnDone = () => {
+      if (!onDoneCalled) {
+        onDoneCalled = true;
+        onDone();
+      }
+    };
+
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -268,8 +313,8 @@ class StarWarsApiClient {
       });
 
       if (!response.ok) {
-        const errorJson = await response.json().catch(() => ({ detail: "Signal break." }));
-        throw new Error(errorJson.detail || `Server warning ${response.status}`);
+        const errorText = await response.text().catch(() => "Signal break.");
+        throw new Error(extractErrorMessage(errorText));
       }
 
       if (!response.body) {
@@ -291,17 +336,35 @@ class StarWarsApiClient {
         // Maintain the last line if it's incomplete
         buffer = lines.pop() || "";
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+        for (let line of lines) {
+          if (line.endsWith("\r")) {
+            line = line.slice(0, -1);
+          }
+          if (!line) continue;
 
-          if (trimmed.startsWith("data: ")) {
-            const data = trimmed.slice(6).trim();
-            if (data === "[DONE]") {
-              onDone();
+          if (line.startsWith("data: ")) {
+            const data = line.substring(6);
+            if (data.trim() === "[DONE]") {
+              safeOnDone();
               return;
             } else {
-              // Convert escaped newlines back
+              const trimmed = data.trim();
+              if (trimmed.startsWith("[ERROR]") || trimmed.startsWith('{"detail"') || (trimmed.startsWith("{") && trimmed.includes('"error"')) || (trimmed.startsWith("{") && trimmed.includes("'error'"))) {
+                throw new Error(extractErrorMessage(trimmed));
+              }
+              const cleanChunk = data.replace(/\\n/g, "\n");
+              onChunk(cleanChunk);
+            }
+          } else if (line.startsWith("data:")) {
+            const data = line.substring(5);
+            if (data.trim() === "[DONE]") {
+              safeOnDone();
+              return;
+            } else {
+              const trimmed = data.trim();
+              if (trimmed.startsWith("[ERROR]") || trimmed.startsWith('{"detail"') || (trimmed.startsWith("{") && trimmed.includes('"error"')) || (trimmed.startsWith("{") && trimmed.includes("'error'"))) {
+                throw new Error(extractErrorMessage(trimmed));
+              }
               const cleanChunk = data.replace(/\\n/g, "\n");
               onChunk(cleanChunk);
             }
@@ -310,12 +373,32 @@ class StarWarsApiClient {
       }
 
       // Final buffer clearance
+      if (buffer.endsWith("\r")) {
+        buffer = buffer.slice(0, -1);
+      }
       if (buffer.startsWith("data: ")) {
-        const data = buffer.slice(6).trim();
-        if (data !== "[DONE]") {
+        const data = buffer.substring(6);
+        if (data.trim() !== "[DONE]") {
+          const trimmed = data.trim();
+          if (trimmed.startsWith("[ERROR]") || trimmed.startsWith('{"detail"') || (trimmed.startsWith("{") && trimmed.includes('"error"')) || (trimmed.startsWith("{") && trimmed.includes("'error'"))) {
+            throw new Error(extractErrorMessage(trimmed));
+          }
           onChunk(data.replace(/\\n/g, "\n"));
         }
-        onDone();
+        safeOnDone();
+      } else if (buffer.startsWith("data:")) {
+        const data = buffer.substring(5);
+        if (data.trim() !== "[DONE]") {
+          const trimmed = data.trim();
+          if (trimmed.startsWith("[ERROR]") || trimmed.startsWith('{"detail"') || (trimmed.startsWith("{") && trimmed.includes('"error"')) || (trimmed.startsWith("{") && trimmed.includes("'error'"))) {
+            throw new Error(extractErrorMessage(trimmed));
+          }
+          onChunk(data.replace(/\\n/g, "\n"));
+        }
+        safeOnDone();
+      } else {
+        // Safe lock release if stream simply ended
+        safeOnDone();
       }
 
     } catch (err: any) {

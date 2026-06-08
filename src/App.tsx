@@ -8,6 +8,7 @@ import {
 import { api } from "./lib/api";
 import { STAR_WARS_CHARACTERS } from "./data/characters";
 import { Chat, Message, User as SwUser, StarWarsCharacter, ConnectionMode } from "./types";
+import Markdown from "react-markdown";
 
 export default function App() {
   // Connection and system states
@@ -1270,9 +1271,8 @@ export default function App() {
                             ? "bg-slate-900/90 border-slate-700/60 text-slate-200 rounded-tr-none" 
                             : `bg-slate-950/80 ${mTheme.border} text-slate-100 rounded-tl-none ${mTheme.glow}`
                         }`}>
-                          {/* Parse the bracket translations dynamically for extra flavor */}
-                          <div className="whitespace-pre-wrap leading-relaxed">
-                            {m.content}
+                          <div className="markdown-body">
+                            <Markdown>{m.content}</Markdown>
                           </div>
                         </div>
 
@@ -1303,10 +1303,10 @@ export default function App() {
                       {selectedCharacter.name} <span className="text-cyan-400 text-[8px] animate-pulse">(STREAMING...)</span>
                     </div>
                     <div className={`px-4 py-2.5 rounded-xl border border-blue-500/30 bg-slate-950/95 text-slate-100 rounded-tl-none shadow-md shadow-blue-500/5`}>
-                      <span className="whitespace-pre-wrap leading-relaxed">
-                        {streamingTokenAcc}
-                      </span>
-                      <span className="w-1.5 h-3.5 bg-blue-400 ml-1 inline-block animate-ping"></span>
+                      <div className="markdown-body inline">
+                        <Markdown>{streamingTokenAcc}</Markdown>
+                      </div>
+                      <span className="w-1.5 h-3.5 bg-blue-400 ml-2 inline-block align-middle animate-pulse"></span>
                     </div>
                   </div>
                 </div>
